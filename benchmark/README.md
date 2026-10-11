@@ -22,3 +22,6 @@ per-drug class balance, calibration and uncertainty, and compare to simple
 baselines. Publish split manifests and their hashes with caller/database and
 AST breakpoint versions so changes in data/callers are distinguishable from
 changes in model performance. Random splits alone do not establish transportability.
+
+The phenotype-only E. coli AST census configuration and its current data
+availability are documented in [the research cohort guide](../docs/ecoli-research-cohort.md).

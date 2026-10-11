@@ -127,6 +127,8 @@ AMRScan does not infer phenotypic resistance from the presence of an AMR gene.
 AST phenotype and genomic AMR determinants remain separate evidence layers.
 See the [AST builder guide](docs/ast-dataset-builder.md) for offline examples,
 source contracts, eligibility rules and validation limits.
+For the publication-scale E. coli cohort census, observation/endpoint rules,
+and current source availability, see the [research cohort guide](docs/ecoli-research-cohort.md).
 
 ## Legacy compatibility
 

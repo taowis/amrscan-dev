@@ -33,6 +33,9 @@ META_FIELDS = (
     "target_acc biosample_acc asm_acc Run scientific_name collection_date geo_loc_name "
     "isolation_source host epi_type bioproject_acc species_taxid isolate_identifiers"
 ).split()
+# Optional metadata enrichments used by downstream cohort summaries. Keeping
+# them optional preserves compatibility with previously archived snapshots.
+META_OPTIONAL = {"strain", "taxid", "erd_group", "bioproject_center"}
 # These two optional columns support archived tables enriched by an identified source.
 AST_OPTIONAL = {"method", "standard_version"}
 SCHEMA = (
@@ -105,7 +108,7 @@ def new_directory(destination: Path) -> Iterator[Path]:
 
 def read_table(path: Path, role: str) -> list[dict[str, str]]:
     fields = AST_FIELDS if role == "ast" else META_FIELDS
-    allowed = set(fields) | (AST_OPTIONAL if role == "ast" else set())
+    allowed = set(fields) | (AST_OPTIONAL if role == "ast" else META_OPTIONAL)
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter="\t", strict=True)
         header = next(reader, [])
@@ -113,7 +116,9 @@ def read_table(path: Path, role: str) -> list[dict[str, str]]:
             header[0] = header[0].removeprefix("#")
         if len(set(header)) != len(header):
             raise ValueError(f"{path.name}: duplicate columns")
+        optional = AST_OPTIONAL if role == "ast" else META_OPTIONAL
         missing, extra = set(fields) - set(header), set(header) - allowed
+        missing -= optional
         if missing or extra:
             raise ValueError(f"{path.name}: schema mismatch; missing={sorted(missing)}, unexpected={sorted(extra)}")
         result = []
@@ -186,7 +191,8 @@ def download(outdir: Path, query: str = DEFAULT_QUERY, max_bytes: int = 128 * 10
         for number, batch in enumerate(batches, 1):
             selection = "target_acc:(" + " OR ".join(batch) + ")" if batch else "target_acc:__empty_selection__"
             raw = staging / f"isolates.{number:04d}.tsv"
-            entry, _ = fetch_table("isolates", selection, META_FIELDS, raw, "metadata", max_bytes)
+            entry, _ = fetch_table("isolates", selection, META_FIELDS + sorted(META_OPTIONAL), raw,
+                                   "metadata", max_bytes)
             sources.append(entry)
         write_json(staging / "manifest.json", {"schema_version": VERSION, "parser_version": VERSION,
                    "query": query, "acquisition": "official-table-export", "sources": sources})

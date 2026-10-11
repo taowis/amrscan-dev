@@ -83,6 +83,17 @@ the AST-linked summary for a five-isolate cohort are documented in
 The validation CLI audits evidence and does not substitute for the scientific
 study design.
 
+## E. coli research cohort builder
+
+`test_ecoli_cohort.py` uses invented, offline AST/metadata archives. It covers
+identity consensus, repeated and conflicting observations, nonbinary/unknown
+phenotypes, analysis-specific missingness, deterministic output, source
+candidate deduplication, provenance, and malformed archives. It does not claim
+to reproduce a population census. The current archived metadata candidate list
+contains 10,521 unique PDT accessions; its matching full AST export is not
+available, so cohort-population summaries remain uncomputed. See
+[`docs/ecoli-research-cohort.md`](../docs/ecoli-research-cohort.md).
+
 ## AST fixtures and scenarios
 
 `fixtures/ast.synthetic.tsv` and `fixtures/isolates.synthetic.tsv` each contain
