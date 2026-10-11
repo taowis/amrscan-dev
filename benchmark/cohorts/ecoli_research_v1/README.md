@@ -8,5 +8,5 @@ AST observations are collapsed only for the derived endpoint; every observation
 is retained. Discordance and nonbinary values remain explicit and are excluded
 from the binary denominator.
 
-Study-drug panel thresholds are intentionally unset pending review of a complete
-population census. See [the cohort methods and current census status](../../../docs/ecoli-research-cohort.md).
+Study-drug panel thresholds are intentionally unset pending scientific review of
+the population census. See [the cohort methods and current census status](../../../docs/ecoli-research-cohort.md).

@@ -89,9 +89,10 @@ study design.
 identity consensus, repeated and conflicting observations, nonbinary/unknown
 phenotypes, analysis-specific missingness, deterministic output, source
 candidate deduplication, provenance, and malformed archives. It does not claim
-to reproduce a population census. The current archived metadata candidate list
-contains 10,521 unique PDT accessions; its matching full AST export is not
-available, so cohort-population summaries remain uncomputed. See
+to reproduce a population census. The real census (10,521 PDT isolates,
+162,701 AST observations) is built outside this suite from archived NCBI
+exports by the scripts in `scripts/ecoli_research_v1/`, which are not unit
+tested. See
 [`docs/ecoli-research-cohort.md`](../docs/ecoli-research-cohort.md).
 
 ## AST fixtures and scenarios
