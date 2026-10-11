@@ -23,14 +23,24 @@ FASTA = b">contig1\nACGTACGT\n"
 REPORT = {"assemblyInfo": {"assemblyAccession": ROW["assembly_accession"]},
           "biologicalMaterial": {"biosample": {"accession": ROW["biosample_accession"]}},
           "organism": {"organismName": ROW["organism"]}}
+CURRENT_REPORT = {"assemblyInfo": {"biosample": {"accession": ROW["biosample_accession"],
+                   "description": {"organism": {"organismName": ROW["organism"]}}}},
+                  "currentAccession": ROW["assembly_accession"]}
 
 
 def package(report=REPORT, fasta=FASTA, include_fasta=True):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as z:
+        members = {}
         if include_fasta:
-            z.writestr(f"ncbi_dataset/data/{ROW['assembly_accession']}/GCF_genomic.fna", fasta)
-        z.writestr("ncbi_dataset/data/assembly_data_report.jsonl", json.dumps(report) + "\n")
+            members[f"ncbi_dataset/data/{ROW['assembly_accession']}/GCF_genomic.fna"] = fasta
+        members["ncbi_dataset/data/assembly_data_report.jsonl"] = (json.dumps(report) + "\n").encode()
+        members["ncbi_dataset/data/sequence_report.jsonl"] = b"{}\n"
+        members["ncbi_dataset/data/dataset_catalog.json"] = b"{}\n"
+        checksums = "".join(f"{hashlib.md5(data).hexdigest()}  {name}\n" for name, data in members.items())
+        z.writestr("md5sum.txt", checksums)
+        for name, data in members.items():
+            z.writestr(name, data)
     return stream.getvalue()
 
 
@@ -142,6 +152,64 @@ class GenomeDatasetTests(unittest.TestCase):
         path.write_bytes(b">x\nTTTT\n")
         with self.assertRaisesRegex(ValueError, "SHA-256"):
             genome.validate(self.manifest, self.out)
+
+    def test_current_ncbi_report_schema_and_manual_package_import(self):
+        archive = package(report=CURRENT_REPORT)
+        package_path = self.root / "assembly.zip"
+        package_path.write_bytes(archive)
+        packages = self.root / "packages.tsv"
+        packages.write_text(
+            "assembly_accession\tpackage_path\tsource_url\tretrieved_at\n"
+            f"{ROW['assembly_accession']}\tassembly.zip\thttps://ncbi.example/archive\t2026-10-11T06:31:25Z\n",
+            encoding="utf-8")
+        self.assertEqual(genome.import_packages(self.manifest, packages, self.out), 1)
+        self.assertEqual(genome.validate(self.manifest, self.out), 1)
+        payload = json.loads((self.out / "provenance.json").read_text())
+        item = payload["assemblies"][0]
+        self.assertEqual(item["biosample_accession"], ROW["biosample_accession"])
+        self.assertEqual(item["package_sha256"], hashlib.sha256(archive).hexdigest())
+        self.assertEqual(item["retrieved_at"], "2026-10-11T06:31:25Z")
+
+    def test_manual_import_requires_complete_packages_and_safe_metadata(self):
+        archive = package(report=CURRENT_REPORT)
+        package_path = self.root / "assembly.zip"
+        package_path.write_bytes(archive)
+        packages = self.root / "packages.tsv"
+        valid = ("assembly_accession\tpackage_path\tsource_url\tretrieved_at\n"
+                 f"{ROW['assembly_accession']}\tassembly.zip\thttps://ncbi.example/archive\t2026-10-11T06:31:25Z\n")
+        for text, error in [(valid.replace("https://", "http://"), "HTTPS"),
+                            (valid.replace("2026-10-11T06:31:25Z", "2026-10-11T06:31:25"), "timezone"),
+                            (valid.replace("GCF_000000001.1", "GCF_000000002.1"), "match")]:
+            packages.write_text(text, encoding="utf-8")
+            with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                genome.import_packages(self.manifest, packages, self.out)
+
+    def test_package_import_rejects_bad_ncbi_md5_manifest(self):
+        archive = package(report=CURRENT_REPORT)
+        broken = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(archive)) as source, zipfile.ZipFile(broken, "w") as target:
+            for info in source.infolist():
+                payload = source.read(info.filename)
+                if info.filename == "md5sum.txt":
+                    payload = payload.replace(hashlib.md5(FASTA).hexdigest().encode(), b"0" * 32)
+                target.writestr(info.filename, payload)
+        package_path = self.root / "broken.zip"
+        package_path.write_bytes(broken.getvalue())
+        packages = self.root / "packages.tsv"
+        packages.write_text(
+            "assembly_accession\tpackage_path\tsource_url\tretrieved_at\n"
+            f"{ROW['assembly_accession']}\tbroken.zip\thttps://ncbi.example/archive\t2026-10-11T06:31:25Z\n",
+            encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "MD5 mismatch"):
+            genome.import_packages(self.manifest, packages, self.out)
+
+    def test_manual_import_cli(self):
+        with patch.object(genome, "import_packages", return_value=1) as importer:
+            result = genome.main(["import-packages", "--manifest", str(self.manifest),
+                                  "--packages-tsv", str(self.root / "packages.tsv"),
+                                  "--outdir", str(self.out)])
+        self.assertEqual(result, 0)
+        importer.assert_called_once()
 
     def test_download_rejects_identity_fasta_existing_and_partial(self):
         mismatch = dict(REPORT)

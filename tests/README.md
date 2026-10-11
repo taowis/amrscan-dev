@@ -28,8 +28,10 @@ Missing Nextflow or legacy dependencies are reported as skips.
 `test_amrfinder_validation.py` builds a synthetic one-isolate package, mocked
 caller provenance and AST rows. It checks exact-PDT linkage, Assembly/BioSample
 and caller hashes, conflict/nonbinary observation retention, explicit no-call
-status, deterministic counts and safe output publication. It does not run an
-AMRFinderPlus binary, retrieve an NCBI assembly or provide biological evidence.
+status, deterministic counts and safe output publication. The genome retrieval
+tests also exercise the current NCBI assembly-report schema and offline package
+import, including package MD5 validation. These tests are separate from the
+real-data run documented in `docs/amrfinder-validation.md`.
 
 `tests/test-run.R` is retained as a legacy demonstration, not part of the
 lightweight suite. It invokes a fixed-path script against historical large
@@ -75,9 +77,11 @@ is not a biological database. No mock calls or fixtures are accepted by the
 production Nextflow caller path as successful real AMRFinderPlus executions.
 
 A real integration run requires AMRFinderPlus, its dependencies, an immutable
-indexed database release, and known positive/negative caller controls. It has
-not been executed in this environment. The validation CLI can link and audit
-real artifacts once they exist; it does not substitute for that run.
+indexed database release, and caller controls. One real assembly call and
+harmonization have been executed and are documented in
+`docs/amrfinder-validation.md`; the AST-linked cohort summary remains pending.
+The validation CLI audits evidence and does not substitute for the scientific
+study design.
 
 ## AST fixtures and scenarios
 

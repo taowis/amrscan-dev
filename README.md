@@ -204,9 +204,12 @@ caller adapters (RGI/CARD and ResFinder), and leakage-aware evaluation. See
 The accession-verified AMRFinderPlus retrieval, evidence-linking and
 deterministic summary implementation is described in
 [docs/amrfinder-validation.md](docs/amrfinder-validation.md).
-Its software paths are offline-tested, but no complete AST snapshot, assembly
-FASTA, AMRFinderPlus run or real cohort has been validated. The cohort manifest
-remains empty, and the PR stays Draft until the documented real-data chain passes.
+The software paths are offline-tested. No complete AST snapshot or linked real
+cohort has been validated. One NCBI assembly
+package and one real AMRFinderPlus 4.2.7 call have now been identity-,
+hash- and provenance-checked; the sample remains outside the cohort until its
+complete AST export is archived and linked. The cohort manifest remains empty,
+and the PR stays Draft until the AST-linked study is complete.
 
 ## Citation and license
 

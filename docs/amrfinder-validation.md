@@ -26,10 +26,14 @@ showed candidate assembly-linked records:
 | `PDT000026734.2` | `SAMN02581401` | `GCA_000633675.2` | First retrieved AST page contained ND observations. |
 | `PDT000041778.1` | `SAMN03075588` | `GCA_000770275.1` | First retrieved AST page contained conflicting submitter observations. |
 
-These preliminary lookup responses were not archived as a complete AST
-snapshot or independently checked against Assembly reports; neither record is
-admitted to the cohort. Subsequent requests failed DNS resolution, so no
-complete NCBI AST snapshot or assembly FASTA was published.
+The candidate `GCA_000770275.1` has since been checked against an official NCBI
+Datasets genome package retrieved on 2026-10-11. Its report identifies
+BioSample `SAMN03075588`, *Escherichia coli*, strain MRSN17749, Assembly
+`ASM77027v1`, 92 sequences and 5,046,460 bases. The package's NCBI MD5 list and
+recorded SHA-256 hashes were verified. The package remains locally under the
+Git-ignored `datasets/ncbi_manual/` directory. The candidate is still not
+admitted: its complete, source-preserved Pathogen Detection AST export has not
+been archived and linked.
 The AST request used the official [Pathogen Detection service](https://www.ncbi.nlm.nih.gov/pathogens/pathogens-srv/)
 with `collection=ast`, filter `scientific_name:"Escherichia coli"`, and
 `limit=20`; the metadata lookup used `collection=isolates` with the two exact
@@ -42,6 +46,25 @@ then checks the returned Assembly accession, BioSample, exact organism, FASTA
 structure and SHA-256. Its provenance records the manifest hash, source URL,
 retrieval time, package member and FASTA hash. It refuses to overwrite prior
 outputs. Genome files and provenance are ignored by Git.
+
+If the command-line environment cannot reach NCBI, retrieve the complete
+official NCBI Datasets ZIP in a browser or another network-enabled environment.
+Keep `md5sum.txt`, the Assembly report and FASTA in the package. Create a
+tab-separated package manifest with columns `assembly_accession`,
+`package_path`, `source_url` and timezone-qualified `retrieved_at`; paths may
+be absolute or relative to that table. The offline importer checks every
+member listed in `md5sum.txt`, current and legacy NCBI report identity fields,
+FASTA structure, package hash and cohort mapping before publishing files.
+
+```sh
+python3 bin/genome_dataset.py import-packages \
+  --manifest benchmark/cohorts/ecoli_amrfinder_validation.tsv \
+  --packages-tsv /path/to/ncbi-packages.tsv \
+  --outdir datasets/ecoli_validation/genomes
+python3 bin/genome_dataset.py validate \
+  --manifest benchmark/cohorts/ecoli_amrfinder_validation.tsv \
+  --genomes datasets/ecoli_validation/genomes
+```
 
 ```sh
 python3 bin/genome_dataset.py download \
@@ -69,13 +92,14 @@ python3 bin/ast_dataset.py build \
 ## Caller environment, database and control
 
 `environment/amrfinderplus.yml` pins AMRFinderPlus 4.2.7 and Python 3.12.
-The environment could not be created here: Conda could not resolve
-`conda.anaconda.org`, and its terms cache is outside the writable workspace.
-No installed AMRFinderPlus version or database release/fingerprint is
-available. The official NCBI usage documentation lists `Escherichia` as the
-organism argument (`-O`); this was checked in the documentation, not against
-an installed 4.2.7 binary. Verify it locally with `amrfinder -l` before
-calling the cohort.
+AMRFinderPlus 4.2.7 was installed in a temporary macOS ARM64 Conda environment
+using conda-forge and bioconda, without accepting additional channel terms.
+Database snapshot `2026-08-07.1` was downloaded from NCBI FTP; all 162 files in
+the recorded SHA-256 manifest pass. The real binary reports software 4.2.7,
+database 2026-08-07.1, and lists `Escherichia` as a supported organism option.
+Package URLs and hashes, database provenance and file hashes remain in
+Git-ignored `datasets/amrfinderplus-db/`; the environment is under
+`/private/tmp` and may not persist across restarts.
 
 On a network-enabled host, create the pinned environment and download a
 separate database snapshot. Keep the generated dated release directory
@@ -110,11 +134,17 @@ documents this installation test, and the [NCBI AMRFinderPlus repository](https:
 contains its public-domain notice. Retrieve those four upstream files into an
 ignored scratch directory, preserve each source URL and SHA-256, run the
 installation test with the selected immutable database, and compare output
-with the expected file. Record
-`amrfinder --database_version` and the database file fingerprint. This control
-was **not run** here. The tracked v4.0.23 expected-report fixture is parser
-input only; the tiny synthetic FASTA is not a biological negative control.
-No-hit must not be reported as susceptibility.
+with the expected file. Record `amrfinder --database_version` and the database
+file fingerprint. This control was run with software 4.2.7 and database
+2026-08-07.1. AMRFinderPlus exited successfully and 25 of 26 expected rows
+match. The sole difference is the `blaEC` closest-reference annotation:
+expected `WP_063610930.1` (EC-15), observed `WP_498365732.1` (EC-28), with the
+same `blaEC` symbol and class. A database-content difference is plausible but
+has not been confirmed; this is a partial control result, not an exact-output
+pass. The tracked v4.0.23 expected-report fixture remains parser input only.
+The synthetic `tests/fixtures/tiny.fna` also completed a real caller no-hit
+smoke with zero data rows; it is not a biological negative control, and no-hit
+must not be reported as susceptibility.
 
 On a host with the pinned environment and database, the upstream control can
 be retrieved and checked without adding sequence data to Git:
@@ -191,14 +221,14 @@ python3 bin/amrfinder_validation.py summarize \
 | --- | --- |
 | Retrieval, linkage and summary implementation | Implemented. Identity/hash mismatches fail closed. |
 | Offline tests | Passed using mocked NCBI packages, synthetic FASTA, upstream report rows and AST fixtures. These validate software behavior only. |
-| Official Pathogen Detection lookup | Two small candidate lookups succeeded briefly; candidates are documented above but not admitted. |
-| Live AST snapshot and assembly FASTA retrieval | Not validated. Later network requests failed DNS; no source snapshot, assembly report or FASTA was published. |
-| AMRFinderPlus 4.2.7 and database | Not installed; no database release/fingerprint. |
-| Positive/negative real caller controls | Not run. The NCBI upstream positive software control is identified above; no biological E. coli negative control is claimed. |
-| Real cohort, real genotyping and real-data summary | Not validated. The cohort manifest remains header-only; no real cohort counts/calls are claimed. |
+| Official Pathogen Detection lookup | Two preliminary candidate mappings were observed; complete AST rows for the candidate are not archived. |
+| NCBI assembly package | `GCA_000770275.1` report identity, 92-sequence FASTA, NCBI MD5s and recorded SHA-256s verified. |
+| AMRFinderPlus and database | Real binary 4.2.7 with database 2026-08-07.1; 162-file SHA-256 manifest passes. |
+| Real genome call and provenance | `GCA_000770275.1` / `PDT000041778.1`: real call succeeded with 18 reported rows (17 AMR and 1 STRESS). Call provenance records the exact FASTA SHA-256, raw report SHA-256, caller version and database file hashes; harmonization completed. Database fingerprint: `sha256:748425a026512fda44008b9d106a4546518cc57dac59eb6432232eb3ac2c978b`. The candidate is not counted in the cohort without archived AST evidence. |
+| Caller controls | NCBI upstream positive software control: 25/26 rows match, with one unresolved `blaEC` reference annotation difference. Synthetic no-hit smoke: zero data rows. No biological E. coli negative control is claimed. |
+| AST snapshot, linked cohort and summary | Not validated. The tracked cohort manifest remains header-only; there are zero AST-linked isolates and no real cohort summary. |
 
-Keep PR #4 in Draft until at least one accession-verified real NCBI assembly
-has been retrieved and run through the real AMRFinderPlus caller, harmonized,
-and included in an auditable provenance chain. Then complete the intended
-3–10 isolate cohort and repeat the documented checks. Offline tests do not
-meet this scientific completion criterion.
+Keep PR #4 in Draft until the archived AST observations can be linked to
+accession-verified assemblies and the intended 3–10 isolate cohort can be
+summarized. One real accession-to-caller-to-harmonized-result chain has now
+been demonstrated, but it does not yet establish the AST-linked study.
