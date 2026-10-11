@@ -18,7 +18,7 @@ for s in man["sources"]:
     if s["role"] == "metadata":
         for r in ad.read_table(snap / s["filename"], "metadata"): meta[r["target_acc"]].append(r)
 cl = collections.defaultdict(list)
-with cand.open() as h:
+with cand.open(encoding="utf-8-sig", newline="") as h:
     rd = csv.reader(h, delimiter="\t"); hdr = [x.lstrip("#") for x in next(rd)]
     for r in rd: d = dict(zip(hdr, r)); cl[d["target_acc"]].append(d)
 out = collections.Counter(); issues = collections.defaultdict(list)
@@ -34,7 +34,7 @@ for pdt, rows in meta.items():
     if not re.fullmatch(r"GCA_\d{9}\.\d+", r0["asm_acc"]): issues["not a versioned GCA"].append((pdt, r0["asm_acc"]))
     if r0["scientific_name"] != "Escherichia coli": issues["organism not E. coli"].append((pdt, r0["scientific_name"]))
     if r0.get("species_taxid") != "562": issues["species_taxid not 562"].append((pdt, r0.get("species_taxid")))
-    old = {(c["biosample_acc"], c["asm_acc"], c["scientific_name"], c["strain"]) for c in cl.get(pdt, [])}
+    old = {(c["biosample_acc"], c["asm_acc"], c["scientific_name"], c.get("strain", "")) for c in cl.get(pdt, [])}
     new = {(r["biosample_acc"], r["asm_acc"], r["scientific_name"], r.get("strain", "")) for r in rows}
     if old != new: issues["changed since 2026-10-11 candidate list"].append((pdt, sorted(old), sorted(new)))
 bs_to_pdt = collections.defaultdict(set); asm_to_pdt = collections.defaultdict(set)

@@ -29,8 +29,11 @@ now = lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
 key = lambda p: tuple(int(x) for x in re.fullmatch(r"PDT(\d+)\.(\d+)", p).groups())
 
-with candidates.open(encoding="utf-8", newline="") as h:
-    rows = list(csv.reader(h, delimiter="\t"))
+with candidates.open(encoding="utf-8-sig", newline="") as h:
+    rows = [r for r in csv.reader(h, delimiter="\t") if r and r[0].strip()]
+bad = sorted({r[0] for r in rows[1:] if not re.fullmatch(r"PDT\d+\.\d+", r[0])})
+if bad:
+    raise SystemExit(f"candidate list has {len(bad)} unversioned or malformed PDTs, e.g. {bad[:3]}")
 pdts = sorted({r[0] for r in rows[1:]}, key=key)
 batches = [pdts[i:i + size] for i in range(0, len(pdts), size)]
 (out / "batches" / "headers").mkdir(parents=True, exist_ok=False)
@@ -53,7 +56,7 @@ def count(collection, flt, tag):
             if code == 0 and status == "200" and d.get("success") is True:
                 return {"url": url, "retrieved_at": t, "http_status": status, "attempts": attempt,
                         "total": d["ngout"]["data"]["totalCount"], "sha256": sha(body)}
-        except (ValueError, KeyError):
+        except (OSError, ValueError, KeyError):
             pass
         time.sleep(5 * attempt)
     raise SystemExit(f"count failed for {tag}: curl={code} http={status} {err}")

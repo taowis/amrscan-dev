@@ -370,7 +370,7 @@ def summarize_antimicrobials(endpoints: list[dict], config: dict) -> list[dict]:
     for drug, rows in sorted(by_drug.items()):
         binary = [r for r in rows if r["eligible_binary_rs"] == "true"]
         rs_counts = Counter(r["phenotype_endpoint"] for r in binary)
-        countries = unique_values(r["country"] for r in rows)
+        countries = unique_values(r["country"] for r in rows if r["country"] not in COUNTRY_MISSING)
         country_n = len({r["isolate_id"] for r in rows if r["country"] not in COUNTRY_MISSING})
         years = sorted({int(r["collection_year"]) for r in rows if re.fullmatch(r"\d{4}", r["collection_year"] or "")})
         year_n = len({r["isolate_id"] for r in rows if re.fullmatch(r"\d{4}", r["collection_year"] or "")})
@@ -500,7 +500,7 @@ def inventory(candidate_path: Path, outdir: Path, source_url: str, query: str, r
         missing_columns = set(required) - set(header)
         if missing_columns:
             raise ValueError(f"candidate export missing columns: {sorted(missing_columns)}")
-        positions = {name: header.index(name) for name in required}
+        positions = {name: header.index(name) for name in required + ["taxid"] if name in header}
         grouped = defaultdict(list)
         rows_n = 0
         for ordinal, values in enumerate(reader, 2):
@@ -683,7 +683,7 @@ def build(snapshot: Path, outdir: Path, config_path: Path = DEFAULT_CONFIG) -> d
     code_head = "unknown"
     try:
         code_head = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True,
-                                   text=True).stdout.strip()
+                                   text=True, cwd=Path(__file__).resolve().parent).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         pass
     manifest = {

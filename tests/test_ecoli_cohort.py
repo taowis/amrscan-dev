@@ -253,6 +253,32 @@ class CohortTests(unittest.TestCase):
         self.assertEqual(len(self.read_output(out, "source_candidates.tsv")), 2)
         self.assertTrue((out / "SHA256SUMS").exists())
 
+    def test_candidate_inventory_keeps_optional_taxid(self):
+        source = self.root / "candidate.tsv"
+        fields = ["#target_acc", "biosample_acc", "asm_acc", "scientific_name", "strain", "erd_group",
+                  "bioproject_acc", "taxid"]
+        rows = [["PDT000000001.1", "SAMN00000001", "GCA_000000001.1", "Escherichia coli", "A", "PDS000001.1",
+                 "PRJNA1", "562"]] * 2
+        with source.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+            writer.writerow(fields)
+            writer.writerows(rows)
+        out = self.root / "inventory-taxid"
+        cohort.inventory(source, out, "https://fixture.invalid", "query", "2026-10-11T00:00:00Z")
+        self.assertEqual(self.read_output(out, "source_candidates.tsv")[0]["taxid"], "562")
+
+    def test_antimicrobial_country_count_ignores_placeholder_countries(self):
+        config = cohort.validate_config(self.config)
+        def endpoint(isolate, country):
+            return {"antimicrobial": "ciprofloxacin", "isolate_id": isolate, "eligible_binary_rs": "true",
+                    "phenotype_endpoint": "R", "country": country, "collection_year": "2020",
+                    "source_category": "human", "conflict_status": "none", "assembly_available": "true"}
+        rows = cohort.summarize_antimicrobials(
+            [endpoint("PDT000000001.1", "USA"), endpoint("PDT000000002.1", "unknown"),
+             endpoint("PDT000000003.1", "NA")], config)
+        self.assertEqual(rows[0]["n_countries"], "1")
+        self.assertEqual(rows[0]["country_available_n"], "1")
+
     def test_candidate_inventory_rejects_naive_timestamp_and_bad_rows(self):
         source = self.root / "candidate.tsv"
         fields = ["#target_acc", "biosample_acc", "asm_acc", "scientific_name", "strain", "erd_group", "bioproject_acc"]
