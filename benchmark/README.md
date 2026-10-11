@@ -25,3 +25,7 @@ changes in model performance. Random splits alone do not establish transportabil
 
 The phenotype-only E. coli AST census configuration and its current data
 availability are documented in [the research cohort guide](../docs/ecoli-research-cohort.md).
+Lineage (Achtman ST), SNP-cluster, country, year and source grouping variables,
+holdout feasibility screening and confounding flags for that cohort are in
+[the population structure guide](../docs/ecoli-population-structure.md); no split
+is assigned there.
