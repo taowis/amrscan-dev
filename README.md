@@ -171,7 +171,8 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 [Testing details and coverage commands](tests/README.md) describe fixture scope
 and distinguish mocks, upstream expected reports, and real integration tests.
 GitHub Actions pins Nextflow, checks unit branch coverage, and runs workflow
-validation without AMR databases. AMRFinderPlus integration remains pending.
+validation without AMR databases. Real AMRFinderPlus runs are documented in
+[docs/amrfinder-validation.md](docs/amrfinder-validation.md); CI does not run them.
 
 ## Directory layout and next steps
 
@@ -204,12 +205,12 @@ caller adapters (RGI/CARD and ResFinder), and leakage-aware evaluation. See
 The accession-verified AMRFinderPlus retrieval, evidence-linking and
 deterministic summary implementation is described in
 [docs/amrfinder-validation.md](docs/amrfinder-validation.md).
-The software paths are offline-tested. No complete AST snapshot or linked real
-cohort has been validated. One NCBI assembly
-package and one real AMRFinderPlus 4.2.7 call have now been identity-,
-hash- and provenance-checked; the sample remains outside the cohort until its
-complete AST export is archived and linked. The cohort manifest remains empty,
-and the PR stays Draft until the AST-linked study is complete.
+The software paths are offline-tested. A five-isolate *E. coli* cohort has been
+run end to end on real data: archived NCBI Pathogen Detection AST exports,
+identity-checked NCBI Datasets assemblies, AMRFinderPlus 4.2.7 with database
+2026-08-07.1, harmonization and the linked summary. The cohort is small and
+descriptive; it reports evidence side by side and does not measure
+genotype–phenotype agreement.
 
 ## Citation and license
 

@@ -77,9 +77,9 @@ is not a biological database. No mock calls or fixtures are accepted by the
 production Nextflow caller path as successful real AMRFinderPlus executions.
 
 A real integration run requires AMRFinderPlus, its dependencies, an immutable
-indexed database release, and caller controls. One real assembly call and
-harmonization have been executed and are documented in
-`docs/amrfinder-validation.md`; the AST-linked cohort summary remains pending.
+indexed database release, and caller controls. Real calls, harmonization and
+the AST-linked summary for a five-isolate cohort are documented in
+`docs/amrfinder-validation.md`; they run outside this test suite.
 The validation CLI audits evidence and does not substitute for the scientific
 study design.
 
