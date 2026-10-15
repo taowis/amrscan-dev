@@ -10,7 +10,7 @@ JSON-valued cells are compact, sorted-key JSON. Files are immutable outputs of
 | `genome_qc.tsv` | PR #5 isolate | Assembly statistics, `pass`/`warning`/`fail` and the flags behind them. |
 | `mlst.tsv` | PR #5 isolate | Scheme, ST (only when assigned), status, allele profile, tool and database versions, input SHA-256. |
 | `phylogroup.tsv` | PR #5 isolate | Phylogroup, status, raw tool call, method, version, input SHA-256. |
-| `evaluation_groups.tsv` | PR #5 isolate | Grouping variables and holdout eligibility. No train/validation/test assignment. |
+| `evaluation_groups.tsv` | PR #5 isolate | Grouping variables and holdout eligibility, plus `lineage_component`, `lineage_cv_test_eligible`, `split_unit` (SNP cluster or isolate, never divided), `project_group`, `geography_group` (`reference`/`non_reference`) and `period` (`earlier`/`recent`). No train/validation/test assignment. |
 | `lineage_summary.tsv` | Lineage (ST or UNKNOWN) | Isolate count, cohort fraction, country/year/source spread, binary endpoints, phylogroups. |
 | `lineage_antimicrobial_summary.tsv` | Antimicrobial × lineage | Binary R/S counts of population-eligible endpoints. |
 | `lineage_country_summary.tsv` | Lineage × country | Isolate count. |
@@ -19,6 +19,7 @@ JSON-valued cells are compact, sorted-key JSON. Files are immutable outputs of
 | `snp_cluster_summary.tsv` | NCBI SNP cluster | Isolates, countries, years, lineages, projects, binary R/S endpoints. |
 | `project_summary.tsv` | BioProject × submitter | Isolates, countries, lineages, binary R/S endpoints. |
 | `holdout_feasibility.tsv` | Antimicrobial × holdout axis | Group counts, R/S balance, screening status from explicit config rules, and `HUMAN_REVIEW_REQUIRED`. |
+| `evaluation_plan.tsv` | Antimicrobial | Tier (`primary`/`secondary`/`excluded`) and reason, the numbers behind it, period and non-reference R/S counts, and `yes`/`no` for each analysis, following `evaluation_design` in the config and decision 0001. |
 | `confounding_summary.tsv` | Review flag | Risk type, subject, metric, value, threshold and detail. |
 | `population_summary.json` | Population | Counts and reconciliation checks. |
 | `population_manifest.json` | Build | PR #5 cohort hashes, genome retrieval, tool versions, config hash, code commit, annotation counts. |

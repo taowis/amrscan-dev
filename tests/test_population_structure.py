@@ -25,6 +25,7 @@ LOCI = CONFIG["mlst"]["loci"]
 CAND_FIELDS = ("cohort_id isolate_id pdt_accession biosample_accession assembly_accession organism strain "
                "country collection_year source_category submitter project snp_clusters_json").split()
 EP_FIELDS = "isolate_id antimicrobial phenotype_endpoint eligible_overall".split()
+NA = pop.NA
 
 
 def contig(n, gc=True):
@@ -441,6 +442,74 @@ class PopulationTests(unittest.TestCase):
                          "resistance_snp_cluster_concentration", "lineage_absent_from_recent_years"} <= risks)
         late = [dict(r, collection_year="2021") for r in rows]
         self.assertIn("lineage_year_concentration", {r["risk"] for r in pop.review_flags(late, [], config, 2020)})
+
+    def test_lineage_components_join_sts_through_clusters(self):
+        def row(iid, st, cluster, eligible="true"):
+            return {"isolate_id": iid, "lineage_id": st, "ncbi_snp_cluster": cluster,
+                    "eligible_population_analysis": eligible}
+        rows = [row("a", "ST131", "PDS1"), row("b", "ST14207", "PDS1"), row("c", "ST131", NA),
+                row("d", "UNKNOWN", "PDS1"), row("e", "UNKNOWN", "PDS7"), row("f", "UNKNOWN", "PDS7"),
+                row("g", "UNKNOWN", NA), row("h", "ST10", NA), row("i", "ST131", "PDS1", eligible="false")]
+        comp = pop.lineage_components(rows)
+        self.assertEqual({k: comp[k] for k in "abcd"}, dict.fromkeys("abcd", "ST131+ST14207"))
+        self.assertEqual((comp["e"], comp["f"], comp["g"], comp["h"]), ("PDS7", "PDS7", NA, "ST10"))
+        self.assertNotIn("i", comp)
+
+    def test_evaluation_plan_tiers_and_analyses(self):
+        config = json.loads(json.dumps(self.config))
+        config["evaluation_design"]["drug_tiers"] = {
+            "primary": {"min_R": 2, "min_S": 2, "max_top_project_R_fraction": 0.6, "min_projects_with_both": 2,
+                        "min_sts_with_both": 1},
+            "secondary": {"min_R": 1, "min_S": 1}, "project_both_min": 1, "st_both_min": 1,
+            "excluded": {"x": "confirmation test"}}
+        config["evaluation_design"].update({"temporal_min_per_period": 1,
+                                            "geography": {"reference_country": "USA", "min_pooled": 1,
+                                                          "min_per_country": 1}})
+
+        def ep(drug, ph, project="P1", st="ST1", country="USA", year="2020"):
+            return {"antimicrobial": drug, "phenotype_endpoint": ph, "project": project, "lineage_id": st,
+                    "country": country, "collection_year": year,
+                    "eligible_temporal_holdout": "true" if year != "NA" else "false"}
+        binary = [ep("a", "R"), ep("a", "S"), ep("a", "R", "P2", country="Canada", year="2022"),
+                  ep("a", "S", "P2", country="Canada", year="2022"),
+                  ep("b", "R"), ep("b", "R"), ep("b", "S", year="NA"), ep("b", "S", country=""),
+                  ep("c", "R"), ep("c", "R"), ep("x", "R"), ep("x", "S")]
+        plan = {p["antimicrobial"]: p for p in pop.evaluation_plan(binary, config, 2021)}
+        a, b, c, x = plan["a"], plan["b"], plan["c"], plan["x"]
+        self.assertEqual((a["tier"], a["lineage_cv"], a["project_holdout"], a["temporal"], a["geographic_transfer"]),
+                         ("primary", "yes", "yes", "yes", "yes"))
+        self.assertEqual((a["earlier_R"], a["recent_R"], a["top_project_R_fraction"]), ("1", "1", "0.500000"))
+        self.assertEqual(json.loads(a["non_reference_countries_json"]), {"Canada": [1, 1]})
+        self.assertEqual((b["tier"], b["lineage_cv"], b["project_holdout"], b["temporal"], b["geographic_transfer"]),
+                         ("secondary", "yes", "no", "no", "no"))
+        self.assertIn("top_project_R_fraction 1.0 > 0.6", b["tier_reason"])
+        self.assertEqual((c["tier"], c["tier_reason"], c["lineage_cv"]), ("excluded", "S 0 < 1", "no"))
+        self.assertEqual((x["tier"], x["tier_reason"]), ("excluded", "confirmation test"))
+        self.assertTrue(all(p["source_holdout"] == "no" for p in plan.values()))
+        self.assertEqual(pop.temporal_cutoff([2010, 2020], {"cutoff_year": 2021}), 2021)
+        self.assertEqual(pop.temporal_cutoff([2010, 2020], {"recent_quantile": 0.5}), 2020)
+
+    def test_build_writes_evaluation_design_outputs(self):
+        self.standard_population()
+        summary = self.build()
+        groups = {r["isolate_id"]: r for r in self.read("evaluation_groups.tsv")}
+        one, three, five = groups["PDT000000001.1"], groups["PDT000000003.1"], groups["PDT000000005.1"]
+        self.assertEqual((one["lineage_component"], one["lineage_cv_test_eligible"], one["split_unit"],
+                          one["geography_group"], one["period"], one["project_group"]),
+                         ("ST131", "true", "PDS000000001", "reference", "earlier", "PRJNA1"))
+        self.assertEqual(groups["PDT000000002.1"]["geography_group"], "non_reference")
+        self.assertEqual(groups["PDT000000002.1"]["period"], "recent")
+        self.assertEqual((three["lineage_component"], three["lineage_cv_test_eligible"], three["split_unit"],
+                          three["geography_group"], three["period"]), (NA, "false", "PDT000000003.1", NA, NA))
+        self.assertEqual(five["lineage_component"], NA)
+        plan = {r["antimicrobial"]: r for r in self.read("evaluation_plan.tsv")}
+        self.assertEqual(set(plan), {"ampicillin"})
+        self.assertEqual(plan["ampicillin"]["tier"], "excluded")
+        design = summary["evaluation_design"]
+        self.assertEqual((design["temporal_cutoff_year"], design["population_without_component"],
+                          design["drug_tiers"]), (2021, 1, {"excluded": 1}))
+        manifest = json.loads((self.root / "out/population_manifest.json").read_text())
+        self.assertEqual(manifest["evaluation_design_record"], self.config["evaluation_design"]["decision_record"])
 
     def test_deterministic_rebuild_and_manifest(self):
         self.standard_population()

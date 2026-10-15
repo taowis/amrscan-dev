@@ -227,16 +227,17 @@ both phenotypes. `lineage_country_summary.tsv` has the full table.
 
 Collection years run from 2009 to 2025, with peaks in 2013 (1,123), 2017
 (1,015) and 2019–2020 (1,863 and 1,570) that follow individual projects rather
-than sampling effort; 204 eligible isolates have no usable year. The recent
-cutoff used for the temporal screen is the 80th percentile year of
-population-eligible isolates, 2020, so "recent" means 2020 or later. ST115,
-ST1434, ST1914, ST3580, ST399, ST428, ST4243 and ST355 are at least 90% before
-2020: they exist only in the earlier period. Several drugs changed panel over
-time: sulfisoxazole has 8 endpoints from 2020 on against 4,061 earlier,
-kanamycin 21 against 1,208 and streptomycin 65 against 4,066, and the recent
-cefotaxime endpoints are 362 R to 3 S. A temporal split therefore also changes
-the drug set and the case mix. `lineage_year_summary.tsv` has
-the full table.
+than sampling effort; 204 eligible isolates have no usable year. Year follows
+project closely: 1,515 of the 1,570 isolates from 2020 come from PRJNA809394,
+and isolates from 2021 on come mostly from projects absent earlier. The
+temporal cutoff is fixed at 2021 (see [decision 0001](decisions/0001-ecoli-evaluation-design.md));
+1,197 population isolates (15% of those with a year) are recent. ST115, ST1434,
+ST155, ST1914, ST355, ST3580, ST399, ST4243, ST428 and ST73 are at least 90%
+before 2021. Several drugs changed panel over time: from 2021 on sulfisoxazole
+has 1 endpoint against 4,068 earlier, streptomycin 16 against 4,115 and
+kanamycin 21 against 1,208, and the recent cefotaxime and cefazolin endpoints
+are 362 R to 2 S and 257 R to 12 S. A temporal split therefore also changes the
+drug set and the case mix. `lineage_year_summary.tsv` has the full table.
 
 ## Source
 
@@ -290,16 +291,17 @@ The main ways information could leak across a future split are:
   may be close to each other through genomes outside the cohort.
 
 `confounding_summary.tsv` lists every flag raised by the thresholds in
-`population_config.json` (59 in this build: 13 lineage–source, 11 lineage–country,
-11 lineage–project, 8 lineage absent from recent years, 15 resistance–project,
-1 large SNP cluster). No ST reaches the dominant-lineage threshold of 10% of
+`population_config.json` (61 in this build: 13 lineage–source, 11 lineage–country,
+11 lineage–project, 10 lineages absent after the 2021 cutoff, 15
+resistance–project, 1 large SNP cluster). No ST reaches the dominant-lineage threshold of 10% of
 the eligible population (ST131 is 9.3%), and MLST success is above the 90%
 review threshold. These flags do not exclude anything.
 
 ## Holdout eligibility and feasibility
 
 `evaluation_groups.tsv` gives each isolate its lineage, SNP-cluster, country,
-year and source group and five eligibility flags. It contains no split.
+year and source group and five eligibility flags, plus the evaluation-design
+columns described in the next section. It contains no split.
 
 - population: PR #5 eligible isolate (at least one binary R/S endpoint) and
   genome QC not `fail`;
@@ -319,11 +321,12 @@ in `feasibility_rules` and records the numbers behind the status:
 - country and source: feasible when at least three groups of 50 or more
   isolates each have 10 R and 10 S (country also needs the largest country
   below 80%); marginal with two such groups;
-- temporal: endpoints from the recent period (2020 on) must number at least
+- temporal: endpoints from the recent period (2021 on) must number at least
   100 with 20 R and 20 S for feasible, or 30 with 5 R and 5 S for marginal.
 
 Every row carries `HUMAN_REVIEW_REQUIRED`: the status says whether a holdout
-could be populated, not whether it should be used.
+could be populated, not whether it should be used. What is used is decided in
+the next section.
 
 For the 44 antimicrobials with population endpoints:
 
@@ -331,7 +334,7 @@ For the 44 antimicrobials with population endpoints:
 | --- | --- | --- | --- |
 | Lineage | 30 | 3 | 11 |
 | Country | 12 | 10 | 22 |
-| Temporal | 26 | 7 | 11 |
+| Temporal | 24 | 8 | 12 |
 | Source | 1 | 9 | 34 |
 
 Lineage-feasible: amikacin, amoxicillin-clavulanic acid, ampicillin,
@@ -350,10 +353,10 @@ gentamicin, nalidixic acid, tetracycline, trimethoprim-sulfamethoxazole.
 Marginal: azithromycin, cefazolin, cefepime, cefotaxime, ertapenem, kanamycin,
 levofloxacin, streptomycin, sulfisoxazole, trimethoprim.
 
-Temporal-feasible: the lineage-feasible list without cefotaxime, kanamycin,
-streptomycin and sulfisoxazole. Marginal: azithromycin,
-ceftolozane-tazobactam, colistin, fosfomycin, nitrofurantoin, polymyxin B,
-streptomycin.
+Temporal-feasible: the lineage-feasible list without aztreonam, cefazolin,
+cefotaxime, kanamycin, streptomycin and sulfisoxazole. Marginal: azithromycin,
+aztreonam, cefazolin, ceftolozane-tazobactam, colistin, fosfomycin,
+nitrofurantoin, polymyxin B.
 
 Source: only tetracycline passes; nine more are marginal.
 
@@ -366,22 +369,31 @@ mostly from one project (cefotaxime-clavulanic acid and
 ceftazidime-clavulanic acid from PRJNA885502, kanamycin and ceftiofur from
 PRJNA966974), and should be reviewed before they are used.
 
-## Future holdout design
+## Evaluation design
 
-Points to settle before PR #7 or any model:
+The screen above was reviewed and the evaluation design decided in
+[decision 0001](decisions/0001-ecoli-evaluation-design.md), recorded in the
+`evaluation_design` section of `population_config.json` (version 1.1.0). In
+short:
 
-- whether lineage holdouts group on ST, on SNP cluster within ST, or on both,
-  and how `UNKNOWN` isolates are handled;
-- whether SNP clusters are kept intact inside every split, including random
-  splits;
-- the drug set per axis, starting from the feasible lists above, after the
-  project-concentration review;
-- whether country holdouts are restricted to USA, Canada and the Netherlands
-  and reported as partly lineage holdouts;
-- whether source holdouts are dropped, given that half the population has no
-  source category;
-- the temporal cutoff and how to handle drugs whose panel changes across it;
-- reporting performance by project, not only overall.
+- SNP clusters are never split, in any design (`split_unit`).
+- Lineage holdouts use connected components of shared ST or SNP cluster
+  (`lineage_component`); 1,071 components, seven of which join a large ST to a
+  rare single-locus variant. UNKNOWN isolates join through their SNP cluster
+  (30); the 73 without one are never test data (`lineage_cv_test_eligible`).
+- Leave-one-project-out (`project_group`) is the main external-validity
+  analysis. Geographic transfer is USA to all other countries pooled
+  (`geography_group`). There is no source holdout.
+- The temporal cutoff is 2021 (`period`), reported as a time and study shift.
+
+`evaluation_plan.tsv` applies the drug tiers and lists, for each antimicrobial,
+the numbers behind its tier and which analyses it enters:
+
+| Tier | Drugs | Analyses |
+| --- | --- | --- |
+| Primary (16) | ampicillin, amoxicillin-clavulanic acid, cefoxitin, cefazolin, ceftriaxone, ceftazidime, cefepime, ciprofloxacin, levofloxacin, nalidixic acid, gentamicin, trimethoprim-sulfamethoxazole, tetracycline, chloramphenicol, streptomycin, sulfisoxazole | lineage cross-validation, within-ST by cluster, leave-one-project-out, geographic transfer; temporal for 13 (not cefazolin, streptomycin, sulfisoxazole) |
+| Secondary (9) | meropenem, ertapenem, imipenem, amikacin, tobramycin, piperacillin-tazobactam, aztreonam, ceftiofur, kanamycin | lineage cross-validation only |
+| Excluded (19) | all others, each with its reason in `tier_reason` | none |
 
 ## Outputs and provenance
 
@@ -394,9 +406,10 @@ The manifest records the PR #5 manifest and file hashes, the code commit and
 builder SHA-256, the config SHA-256, the genome retrieval window and a hash over
 all genome hashes, every tool and database version, and annotation counts.
 
-Real build: `datasets/ecoli_research_v1/population_20261012` (Git-ignored),
-config SHA-256 `6d0c67b25476da43576d115cc6daae471734d6d2594d29fe49b2dfee6edb7946`,
-genome hash-list SHA-256
+Real build: `datasets/ecoli_research_v1/population_20261015` (Git-ignored,
+builder and config 1.1.0; the 1.0.0 build `population_20261012` is kept for
+comparison; it differs only in the temporal screen, the review flags, the
+evaluation columns and plan, and the summary and manifest), genome hash-list SHA-256
 `402a4ca2528e545259187d78e7c96b995f19509cc5bac7a2b739bed3559d3692`. A second build
 into a separate directory produced the same `SHA256SUMS`, and every file
 verified. The build takes about 9 minutes with six threads (it reads and hashes
@@ -414,9 +427,9 @@ Python 3.12), with an explicit lockfile kept next to the data.
   or coarse; half the population has no source category.
 - The cohort is a convenience sample of public data dominated by three US and
   Canadian projects. It is not a surveillance sample of E. coli.
-- Feasibility rules and review thresholds are provisional screening values
-  chosen before looking at phenotype–lineage results; they are not study
-  decisions and may need changing after review.
+- Feasibility rules and review thresholds are screening values chosen before
+  looking at phenotype–lineage results. The decisions built on them are in
+  decision 0001 and were made before any genotype–phenotype or model result.
 - EzClermont relies on primer matches in assemblies and can misplace genomes
   when a target gene is split across contigs or diverged; the ST1914 and ST115
   D/A splits may be such cases.

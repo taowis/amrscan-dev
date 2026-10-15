@@ -11,9 +11,11 @@ from the binary denominator.
 Study-drug panel thresholds are intentionally unset pending scientific review of
 the population census. See [the cohort methods and current census status](../../../docs/ecoli-research-cohort.md).
 
-`population_config.json` is version 1.0.0 of the population-structure rules used
+`population_config.json` is version 1.1.0 of the population-structure rules used
 by `bin/population_structure.py`: genome QC bounds, the MLST scheme, the
-phylogroup method, the lineage definition, holdout eligibility, the provisional
-holdout screening rules and the review-flag thresholds. None of these values
-were chosen with reference to phenotype or model results. See
-[the population structure methods and census](../../../docs/ecoli-population-structure.md).
+phylogroup method, the lineage definition, holdout eligibility, the holdout
+screening rules, the review-flag thresholds and, in `evaluation_design`, the
+evaluation design decided in
+[decision 0001](../../../docs/decisions/0001-ecoli-evaluation-design.md). None of
+these values were chosen with reference to genotype–phenotype or model
+results. See [the population structure methods and census](../../../docs/ecoli-population-structure.md).

@@ -33,7 +33,7 @@ from urllib.error import URLError
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import genome_dataset  # noqa: E402
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 NA = "NA"
 csv.field_size_limit(sys.maxsize)
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "benchmark/cohorts/ecoli_research_v1/population_config.json"
@@ -85,7 +85,8 @@ def write_json_atomic(path: Path, value) -> None:
 
 def load_config(path: Path) -> dict:
     config = json.loads(Path(path).read_text(encoding="utf-8"))
-    for key in ("genome_qc", "mlst", "phylogroup", "lineage", "holdout_eligibility", "feasibility_rules", "review_flags"):
+    for key in ("genome_qc", "mlst", "phylogroup", "lineage", "holdout_eligibility", "feasibility_rules", "review_flags",
+                "evaluation_design"):
         if key not in config:
             raise ValueError(f"population config lacks {key}")
     if config["feasibility_rules"].get("decision") != "HUMAN_REVIEW_REQUIRED":
@@ -606,6 +607,11 @@ def recent_cutoff(years: list[int], quantile: float) -> int | None:
     return ordered[min(len(ordered) - 1, int(math.floor(quantile * len(ordered))))]
 
 
+def temporal_cutoff(years: list[int], rule: dict) -> int | None:
+    """Fixed cutoff year when the config sets one, otherwise the configured quantile."""
+    return rule["cutoff_year"] if "cutoff_year" in rule else recent_cutoff(years, rule["recent_quantile"])
+
+
 def classify(metrics: dict, feasible: dict, marginal: dict) -> str:
     def meets(rule):
         for key, limit in rule.items():
@@ -622,7 +628,7 @@ def holdout_feasibility(binary: list[dict], rows: list[dict], config: dict) -> l
     both_min = rules["min_both_per_group"]
     years_all = [int(r["collection_year"]) for r in rows
                  if r["eligible_temporal_holdout"] == "true" and valid_year(r["collection_year"])]
-    cutoff = recent_cutoff(years_all, rules["temporal"]["recent_quantile"])
+    cutoff = temporal_cutoff(years_all, rules["temporal"])
     out = []
     by_drug = defaultdict(list)
     for e in binary:
@@ -746,6 +752,110 @@ def review_flags(rows: list[dict], binary: list[dict], config: dict, cutoff: int
     return flags
 
 
+def lineage_components(rows: list[dict]) -> dict:
+    """Group population isolates that share an assigned ST or an NCBI SNP cluster.
+
+    A cluster spanning two STs joins them. UNKNOWN isolates join through their
+    cluster; one without a cluster has no component and is never test data.
+    """
+    parent = {}
+
+    def find(key):
+        parent.setdefault(key, key)
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    keys = {}
+    for r in rows:
+        if r["eligible_population_analysis"] != "true":
+            continue
+        own = ([f"ST:{r['lineage_id']}"] if r["lineage_id"] != "UNKNOWN" else []) + \
+              ([f"C:{r['ncbi_snp_cluster']}"] if r["ncbi_snp_cluster"] != NA else [])
+        for key in own:
+            find(key)
+        if len(own) == 2:
+            parent[find(own[0])] = find(own[1])
+        keys[r["isolate_id"]] = own
+    members = defaultdict(set)
+    for key in parent:
+        members[find(key)].add(key)
+    names = {}
+    for root, group in members.items():
+        sts = sorted(k[3:] for k in group if k.startswith("ST:"))
+        names[root] = "+".join(sts) if sts else sorted(group)[0][2:]
+    return {iid: names[find(own[0])] if own else NA for iid, own in keys.items()}
+
+
+def evaluation_plan(binary: list[dict], config: dict, cutoff: int | None) -> list[dict]:
+    """Per-antimicrobial tier and analyses, following the evaluation design decisions."""
+    design = config["evaluation_design"]
+    tiers, reference = design["drug_tiers"], design["geography"]["reference_country"]
+    by_drug = defaultdict(list)
+    for e in binary:
+        by_drug[e["antimicrobial"]].append(e)
+    out = []
+    for drug, eps in sorted(by_drug.items()):
+        def per(field, skip=()):
+            g = defaultdict(Counter)
+            for e in eps:
+                if e[field] not in skip:
+                    g[e[field]][e["phenotype_endpoint"]] += 1
+            return g
+        n = Counter(e["phenotype_endpoint"] for e in eps)
+        resistant_projects = Counter(e["project"] for e in eps if e["phenotype_endpoint"] == "R")
+        top_project, top_r = resistant_projects.most_common(1)[0] if resistant_projects else (NA, 0)
+        projects, sts = per("project"), per("lineage_id", {"UNKNOWN"})
+        metrics = {"R": n["R"], "S": n["S"], "top_project_R_fraction": top_r / n["R"] if n["R"] else 1.0,
+                   "projects_with_both": sum(c["R"] >= tiers["project_both_min"] and c["S"] >= tiers["project_both_min"]
+                                             for c in projects.values()),
+                   "sts_with_both": sum(c["R"] >= tiers["st_both_min"] and c["S"] >= tiers["st_both_min"]
+                                        for c in sts.values())}
+        dated = [e for e in eps if e["eligible_temporal_holdout"] == "true"]
+        recent = Counter(e["phenotype_endpoint"] for e in dated if cutoff is not None and int(e["collection_year"]) >= cutoff)
+        earlier = Counter(e["phenotype_endpoint"] for e in dated if cutoff is not None and int(e["collection_year"]) < cutoff)
+        countries = per("country", COUNTRY_MISSING)
+        other = Counter()
+        for country, c in countries.items():
+            if country != reference:
+                other.update(c)
+        local = {k: [c["R"], c["S"]] for k, c in sorted(countries.items()) if k != reference
+                 and c["R"] >= design["geography"]["min_per_country"] and c["S"] >= design["geography"]["min_per_country"]}
+        status = classify(metrics, tiers["primary"], tiers["secondary"])
+        if drug in tiers["excluded"]:
+            tier, reason = "excluded", tiers["excluded"][drug]
+        elif status == "feasible":
+            tier, reason = "primary", "meets primary criteria"
+        else:
+            tier = "secondary" if status == "marginal" else "excluded"
+            rule = tiers["primary"] if status == "marginal" else tiers["secondary"]
+            failed = []
+            for key, limit in rule.items():
+                name = key.removeprefix("min_").removeprefix("max_")
+                value = metrics[name]
+                if key.startswith("min_") and value < limit or key.startswith("max_") and value > limit:
+                    failed.append(f"{name} {round(value, 2)} {'<' if key.startswith('min_') else '>'} {limit}")
+            reason = "; ".join(failed)
+        t_min, g_min = design["temporal_min_per_period"], design["geography"]["min_pooled"]
+        temporal = (tier == "primary" and min(recent["R"], earlier["R"]) >= t_min
+                    and min(recent["S"], earlier["S"]) >= t_min)
+        geographic = tier == "primary" and other["R"] >= g_min and other["S"] >= g_min
+        yes = lambda flag: "yes" if flag else "no"  # noqa: E731
+        out.append({"antimicrobial": drug, "tier": tier, "tier_reason": reason, "n_R": str(n["R"]), "n_S": str(n["S"]),
+                    "top_project": top_project, "top_project_R_fraction": ratio(top_r, n["R"]),
+                    "projects_with_both": str(metrics["projects_with_both"]),
+                    "sts_with_both": str(metrics["sts_with_both"]),
+                    "earlier_R": str(earlier["R"]), "earlier_S": str(earlier["S"]),
+                    "recent_R": str(recent["R"]), "recent_S": str(recent["S"]),
+                    "non_reference_R": str(other["R"]), "non_reference_S": str(other["S"]),
+                    "non_reference_countries_json": canonical(local),
+                    "lineage_cv": yes(tier in ("primary", "secondary")), "within_st_cluster": yes(tier == "primary"),
+                    "project_holdout": yes(tier == "primary"), "geographic_transfer": yes(geographic),
+                    "temporal": yes(temporal), "source_holdout": "no", "decision_record": design["decision_record"]})
+    return out
+
+
 POP_FIELDS = ("cohort_id isolate_id pdt_accession biosample_accession assembly_accession organism strain genome_sha256 "
               "genome_qc_status genome_qc_flags assembly_length contig_count n50 gc_fraction ambiguous_fraction "
               "mlst_scheme mlst_st mlst_status mlst_profile phylogroup phylogroup_status ncbi_snp_cluster "
@@ -760,7 +870,12 @@ MLST_FIELDS = ("isolate_id assembly_accession mlst_scheme mlst_st mlst_status ml
 PHYLO_FIELDS = "isolate_id assembly_accession phylogroup phylogroup_status phylogroup_raw method software_version input_sha256".split()
 GROUP_FIELDS = ("isolate_id lineage_group snp_cluster_group country_group year_group source_group "
                 "population_eligible lineage_holdout_eligible country_holdout_eligible temporal_holdout_eligible "
-                "source_holdout_eligible").split()
+                "source_holdout_eligible lineage_component lineage_cv_test_eligible split_unit project_group "
+                "geography_group period").split()
+PLAN_FIELDS = ("antimicrobial tier tier_reason n_R n_S top_project top_project_R_fraction projects_with_both "
+               "sts_with_both earlier_R earlier_S recent_R recent_S non_reference_R non_reference_S "
+               "non_reference_countries_json lineage_cv within_st_cluster project_holdout geographic_transfer "
+               "temporal source_holdout decision_record").split()
 LINEAGE_FIELDS = ("lineage_id is_lineage isolate_count fraction_of_cohort population_eligible_isolates country_count "
                   "largest_country fraction_from_largest_country earliest_year latest_year year_span "
                   "source_category_count antimicrobial_endpoint_count phylogroups_json").split()
@@ -791,7 +906,7 @@ def build(processed: Path, cache: Path, outdir: Path, config_path: Path = DEFAUL
                            "antimicrobial": e["antimicrobial"], "phenotype_endpoint": e["phenotype_endpoint"]})
     population = [r for r in rows if r["eligible_population_analysis"] == "true"]
     years = [int(r["collection_year"]) for r in population if valid_year(r["collection_year"])]
-    cutoff = recent_cutoff(years, config["feasibility_rules"]["temporal"]["recent_quantile"])
+    cutoff = temporal_cutoff(years, config["feasibility_rules"]["temporal"])
     lineages = lineage_summary(rows, binary, config)
     assigned = [r for r in rows if r["mlst_status"] == "assigned"]
     st_counts = Counter(r["lineage_id"] for r in assigned)
@@ -825,6 +940,8 @@ def build(processed: Path, cache: Path, outdir: Path, config_path: Path = DEFAUL
         raise ValueError(f"population counts do not reconcile: {summary['reconciliation']}")
     flags = review_flags(rows, binary, config, cutoff)
     feasibility = holdout_feasibility(binary, rows, config)
+    components = lineage_components(rows)
+    reference = config["evaluation_design"]["geography"]["reference_country"]
     groups = [{"isolate_id": r["isolate_id"], "lineage_group": r["lineage_id"], "snp_cluster_group": r["ncbi_snp_cluster"],
                "country_group": r["country"] if r["country"] not in COUNTRY_MISSING else NA,
                "year_group": r["collection_year"] if valid_year(r["collection_year"]) else NA,
@@ -832,7 +949,28 @@ def build(processed: Path, cache: Path, outdir: Path, config_path: Path = DEFAUL
                "lineage_holdout_eligible": r["eligible_lineage_holdout"],
                "country_holdout_eligible": r["eligible_country_holdout"],
                "temporal_holdout_eligible": r["eligible_temporal_holdout"],
-               "source_holdout_eligible": r["eligible_source_holdout"]} for r in rows]
+               "source_holdout_eligible": r["eligible_source_holdout"],
+               "lineage_component": components.get(r["isolate_id"], NA),
+               "lineage_cv_test_eligible": "true" if components.get(r["isolate_id"], NA) != NA else "false",
+               "split_unit": r["ncbi_snp_cluster"] if r["ncbi_snp_cluster"] != NA else r["isolate_id"],
+               "project_group": r["project"] if not missing(r["project"]) else NA,
+               "geography_group": NA if r["country"] in COUNTRY_MISSING else
+               "reference" if r["country"] == reference else "non_reference",
+               "period": NA if not valid_year(r["collection_year"]) or cutoff is None else
+               "recent" if int(r["collection_year"]) >= cutoff else "earlier"} for r in rows]
+    plan = evaluation_plan(binary, config, cutoff)
+    population_components = Counter(v for v in components.values() if v != NA)
+    summary["evaluation_design"] = {
+        "temporal_cutoff_year": cutoff,
+        "lineage_components": len(population_components),
+        "lineage_components_joining_several_sts": sorted(k for k in population_components if "+" in k),
+        "unknown_lineage_in_component": sum(by_id[i]["lineage_id"] == "UNKNOWN" and v != NA
+                                            for i, v in components.items()),
+        "population_without_component": sum(v == NA for v in components.values()),
+        "drug_tiers": dict(sorted(Counter(p["tier"] for p in plan).items())),
+        "drugs_per_analysis": {k: sum(p[k] == "yes" for p in plan) for k in
+                               ("lineage_cv", "within_st_cluster", "project_holdout", "geographic_transfer",
+                                "temporal", "source_holdout")}}
     code = "unknown"
     try:
         code = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
@@ -848,6 +986,7 @@ def build(processed: Path, cache: Path, outdir: Path, config_path: Path = DEFAUL
         "pr5_source_snapshot_manifest_sha256": cohort["manifest"].get("source_snapshot_manifest_sha256"),
         "pr5_code_commit": cohort["manifest"].get("code_commit"), "code_commit": code,
         "builder_sha256": sha256(Path(__file__)),
+        "evaluation_design_record": config["evaluation_design"]["decision_record"],
         "isolate_count": len(rows), "assembly_count": summary["unique_assemblies"],
         "genome_retrieval": {"source": "NCBI Datasets v2 genome package", "verified_by": "genome_dataset.package_identity",
                              "genomes": len(genomes), "retrieved_first": retrieved[0] if retrieved else None,
@@ -884,6 +1023,7 @@ def build(processed: Path, cache: Path, outdir: Path, config_path: Path = DEFAUL
                   ("project submitter isolate_count country_count countries_json lineage_count top_lineages_json "
                    "binary_endpoints_R binary_endpoints_S").split(), project_summary(rows, binary))
         write_tsv(staging / "holdout_feasibility.tsv", FEAS_FIELDS, feasibility)
+        write_tsv(staging / "evaluation_plan.tsv", PLAN_FIELDS, plan)
         write_tsv(staging / "confounding_summary.tsv", "risk subject metric value threshold detail".split(), flags)
         (staging / "population_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         (staging / "population_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
