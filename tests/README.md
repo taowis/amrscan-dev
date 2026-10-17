@@ -107,6 +107,22 @@ cohort hash checks, lineage and cross-tab summaries, holdout feasibility rules,
 review flags, deterministic rebuilds and count reconciliation. No test needs
 network access or installed MLST databases.
 
+## E. coli genotype–phenotype baseline
+
+`test_genotype_baseline.py` uses a six-isolate synthetic PR #5 cohort and PR #6
+population build, a fixture database directory, a stand-in caller that writes
+AMRFinderPlus-format reports, and the real PR #4 harmonizer. It covers mapping
+validation (version, checksum, organism, study drug, duplicate and conflicting
+rules, malformed rows), exact, allele- and mutation-specific rules, required
+co-mutations, combination rules, partial hits, AMR versus STRESS elements,
+genotype states (positive, negative, uncertain, and each unavailable reason),
+caller and provenance failures that must not become negatives, resumable and
+quarantining calls, the exact PR #5/#6 join and its hash checks, metrics with
+hand-counted confusion tables and Wilson intervals, undefined metrics,
+stratification with unknown strata and the support rule, the mapping audit,
+denominator reconciliation and deterministic rebuilds. The generated mapping v1
+file is also loaded and spot-checked. No test runs AMRFinderPlus.
+
 ## AST fixtures and scenarios
 
 `fixtures/ast.synthetic.tsv` and `fixtures/isolates.synthetic.tsv` each contain

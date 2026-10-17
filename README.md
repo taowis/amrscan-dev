@@ -132,6 +132,9 @@ and current source availability, see the [research cohort guide](docs/ecoli-rese
 Genome QC, MLST, phylogroup, NCBI SNP clusters and the grouping variables for
 future lineage, country and time holdouts are described in the
 [population structure guide](docs/ecoli-population-structure.md).
+How far established AMR determinants detected by AMRFinderPlus explain the
+cohort's R/S phenotypes, under a versioned determinant-to-antimicrobial
+mapping, is in the [genotype–phenotype baseline guide](docs/ecoli-genotype-phenotype-baseline.md).
 
 ## Legacy compatibility
 

@@ -19,3 +19,12 @@ evaluation design decided in
 [decision 0001](../../../docs/decisions/0001-ecoli-evaluation-design.md). None of
 these values were chosen with reference to genotype–phenotype or model
 results. See [the population structure methods and census](../../../docs/ecoli-population-structure.md).
+
+`baseline_config.json` is version 1.0.0 of the genotype–phenotype baseline
+settings read by `bin/genotype_baseline.py`: the mapping version and files, the
+expected PR #5 and PR #6 manifest hashes, the AMRFinderPlus version and database
+fingerprint, the minimum support for reporting stratum metrics (10 R and 10 S,
+marked for review), the temporal periods from decision 0001 and the thresholds
+for flagging mapping rules in the audit. The mapping itself is in
+`benchmark/mappings/` and is described in
+[decision 0002](../../../docs/decisions/0002-ecoli-determinant-mapping-v1.md).

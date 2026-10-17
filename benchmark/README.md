@@ -29,3 +29,6 @@ Lineage (Achtman ST), SNP-cluster, country, year and source grouping variables,
 holdout feasibility screening and confounding flags for that cohort are in
 [the population structure guide](../docs/ecoli-population-structure.md); no split
 is assigned there.
+The established-determinant baseline that later models are compared with uses
+the mapping in `mappings/` and is described in
+[the genotype–phenotype baseline guide](../docs/ecoli-genotype-phenotype-baseline.md).
