@@ -95,6 +95,18 @@ exports by the scripts in `scripts/ecoli_research_v1/`, which are not unit
 tested. See
 [`docs/ecoli-research-cohort.md`](../docs/ecoli-research-cohort.md).
 
+## E. coli population structure
+
+`test_population_structure.py` uses a five-isolate synthetic PR #5 cohort,
+tiny synthetic genomes, mocked NCBI packages and recorded-format `mlst` JSON and
+EzClermont output. It covers FASTA statistics and QC flags, malformed/empty
+FASTA, MLST statuses (assigned, novel/partial, missing, multiple, novel profile),
+phylogroup statuses, SNP-cluster versions and missingness, resumable and
+identity-checked genome fetching with retries, annotation provenance and reuse,
+cohort hash checks, lineage and cross-tab summaries, holdout feasibility rules,
+review flags, deterministic rebuilds and count reconciliation. No test needs
+network access or installed MLST databases.
+
 ## AST fixtures and scenarios
 
 `fixtures/ast.synthetic.tsv` and `fixtures/isolates.synthetic.tsv` each contain

@@ -129,6 +129,9 @@ See the [AST builder guide](docs/ast-dataset-builder.md) for offline examples,
 source contracts, eligibility rules and validation limits.
 For the publication-scale E. coli cohort census, observation/endpoint rules,
 and current source availability, see the [research cohort guide](docs/ecoli-research-cohort.md).
+Genome QC, MLST, phylogroup, NCBI SNP clusters and the grouping variables for
+future lineage, country and time holdouts are described in the
+[population structure guide](docs/ecoli-population-structure.md).
 
 ## Legacy compatibility
 
